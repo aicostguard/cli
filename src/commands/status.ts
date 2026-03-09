@@ -6,9 +6,16 @@ export async function statusCommand() {
 
   const config = getConfig();
 
-  if (!config) {
-    console.log(chalk.red('❌ Not connected'));
-    console.log(chalk.gray('\nRun `ai-cost-cli connect` to set up your project'));
+  if (!config || (!config.apiKey && !config.token)) {
+    console.log(chalk.red('❌ Not connected\n'));
+    console.log(chalk.bold('First time here? 👋  Here\'s how to get started:\n'));
+    console.log(chalk.white('  1️⃣  Create a FREE account:'));
+    console.log(chalk.cyan('       ai-cost-cli signup\n'));
+    console.log(chalk.white('  2️⃣  Already have an account? Log in:'));
+    console.log(chalk.cyan('       ai-cost-cli login\n'));
+    console.log(chalk.white('  3️⃣  Have an API key already?'));
+    console.log(chalk.cyan('       ai-cost-cli connect --key YOUR_API_KEY\n'));
+    console.log(chalk.gray('  🌐 Sign up on the web: https://aicostguard.com/signup'));
     return;
   }
 

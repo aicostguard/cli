@@ -6,7 +6,7 @@ import * as os from 'os';
 const POSTHOG_API_KEY = 'phc_bX4Ab8QZ0WZL8nsEQfaTw2E6xtijwVjb6jIvbhZ436f';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 
-const CONFIG_DIR = path.join(os.homedir(), '.ai-cost-guard');
+const CONFIG_DIR = path.join(os.homedir(), '.ai-costguard');
 const ANALYTICS_FILE = path.join(CONFIG_DIR, 'analytics.json');
 
 interface AnalyticsState {

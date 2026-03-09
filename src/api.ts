@@ -10,9 +10,13 @@ interface RequestOptions {
   baseUrl?: string;
 }
 
+const PROD_URL = 'https://api.aicostguard.com';
+
 export async function apiRequest<T>(options: RequestOptions): Promise<T> {
   const config = getConfig();
-  const baseUrl = options.baseUrl || config?.baseUrl || 'http://localhost:4000';
+  // Migrate users who have the old localhost default saved in their config
+  const savedUrl = config?.baseUrl && config.baseUrl !== 'http://localhost:4000' ? config.baseUrl : null;
+  const baseUrl = options.baseUrl || savedUrl || PROD_URL;
   const apiKey = options.apiKey || config?.apiKey;
 
   const fullUrl = `${baseUrl}/api/v1${options.path}`;
@@ -70,7 +74,7 @@ export async function apiRequest<T>(options: RequestOptions): Promise<T> {
     );
 
     req.on('error', (err) => {
-      reject(new Error(`Connection failed: ${err.message}\nMake sure the AI Cost Guard server is running.`));
+      reject(new Error(`Connection failed: ${err.message}\nCheck your internet connection or try again later.`));
     });
 
     if (body) {
@@ -80,14 +84,23 @@ export async function apiRequest<T>(options: RequestOptions): Promise<T> {
   });
 }
 
-export async function apiRequestAuth<T>(path: string, token: string, baseUrl?: string): Promise<T> {
-  const config = getConfig();
-  const base = baseUrl || config?.baseUrl || 'http://localhost:4000';
+export async function apiRequestAuth<T>(
+  path: string,
+  token: string,
+  baseUrl?: string,
+  method: string = 'GET',
+  body?: any,
+): Promise<T> {
+  // Migrate: treat localhost:4000 (old default) as if it was not set
+  const effectiveUrl = baseUrl && baseUrl !== 'http://localhost:4000' ? baseUrl : null;
+  const base = effectiveUrl || PROD_URL;
   const fullUrl = `${base}/api/v1${path}`;
   const url = new URL(fullUrl);
 
   const isHttps = url.protocol === 'https:';
   const lib = isHttps ? https : http;
+
+  const bodyStr = body ? JSON.stringify(body) : undefined;
 
   return new Promise((resolve, reject) => {
     const req = lib.request(
@@ -95,7 +108,7 @@ export async function apiRequestAuth<T>(path: string, token: string, baseUrl?: s
         hostname: url.hostname,
         port: url.port || (isHttps ? 443 : 80),
         path: url.pathname + url.search,
-        method: 'GET',
+        method,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -109,7 +122,7 @@ export async function apiRequestAuth<T>(path: string, token: string, baseUrl?: s
             try {
               const json = JSON.parse(data);
               const message = json.message || json.error || `HTTP ${res.statusCode}`;
-              reject(new Error(message));
+              reject(new Error(Array.isArray(message) ? message.join(', ') : message));
             } catch {
               reject(new Error(`HTTP ${res.statusCode}: ${data.substring(0, 200)}`));
             }
@@ -129,6 +142,9 @@ export async function apiRequestAuth<T>(path: string, token: string, baseUrl?: s
       },
     );
     req.on('error', (err) => reject(new Error(`Connection failed: ${err.message}`)));
+    if (bodyStr) {
+      req.write(bodyStr);
+    }
     req.end();
   });
 }

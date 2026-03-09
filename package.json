@@ -1,7 +1,7 @@
 {
   "name": "ai-cost-cli",
-  "version": "1.0.0",
-  "description": "Analyze and optimize your AI/LLM API costs from the terminal. Monitor OpenAI, Anthropic, Gemini spending with real-time dashboards, budget alerts, and cost breakdowns across 50+ models.",
+  "version": "1.0.2",
+  "description": "Monitor every LLM API call and never get surprised by your AI bill again. Real-time cost tracking for OpenAI, Anthropic, Gemini across 50+ models with analytics, budget alerts, and optimization tips.",
   "bin": {
     "ai-cost": "./dist/index.js",
     "ai-cost-cli": "./dist/index.js"
@@ -38,19 +38,18 @@
     "developer-tools",
     "ai-ops"
   ],
-  "author": "AI Cost Guard <sdk@aicostguard.com>",
+  "author": "aicostguard",
   "license": "MIT",
   "homepage": "https://aicostguard.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/crediblearena/ai-cost-guard",
-    "directory": "packages/cli"
+    "url": "https://github.com/aicostguard/cli"
   },
   "bugs": {
-    "url": "https://github.com/crediblearena/ai-cost-guard/issues"
+    "url": "https://github.com/aicostguard/cli/issues"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "chalk": "^4.1.2",

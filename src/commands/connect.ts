@@ -13,39 +13,40 @@ export async function connectCommand(options: ConnectOptions) {
   console.log(chalk.bold.cyan('\n🛡️  AI Cost Guard — Connect\n'));
 
   let apiKey = options.key;
-  let baseUrl = options.url || 'http://localhost:4000';
+  const existingConfig = getConfig();
+  const savedUrl = existingConfig?.baseUrl && existingConfig.baseUrl !== 'http://localhost:4000'
+    ? existingConfig.baseUrl
+    : null;
+  let baseUrl = options.url || savedUrl || 'https://api.aicostguard.com';
 
   if (!apiKey) {
     const answers = await inquirer.prompt([
       {
         type: 'input',
         name: 'apiKey',
-        message: 'Enter your project API key:',
-        validate: (input: string) => input.length > 10 || 'API key is too short',
-      },
-      {
-        type: 'input',
-        name: 'baseUrl',
-        message: 'API base URL:',
-        default: baseUrl,
+        message: 'Paste your project API key:',
+        validate: (input: string) =>
+          (input.trim().length > 10 && input.trim().startsWith('acg_'))
+            ? true
+            : 'API key should start with acg_ and be longer than 10 characters',
       },
     ]);
-    apiKey = answers.apiKey;
-    baseUrl = answers.baseUrl;
+    apiKey = answers.apiKey.trim();
   }
 
-  const spinner = ora('Verifying API key...').start();
+  const spinner = ora('Verifying API key with server...').start();
 
   try {
-    // Test the connection by sending a track event (dry run)
-    // We'll just try to hit the pricing endpoint which is public
+    // Verify key by calling the public pricing endpoint AND confirming the server is reachable.
+    // Full key validation (against your project) happens on first `analyze` or SDK track call.
     const models = await apiRequest<any[]>({
       path: '/pricing/models',
       baseUrl,
+      apiKey: apiKey!, // send key in header so server logs the attempt
     });
 
     if (!models || !Array.isArray(models)) {
-      spinner.fail('Could not connect to the server');
+      spinner.fail('Could not reach the AI Cost Guard server. Check your internet connection.');
       return;
     }
 
@@ -56,19 +57,22 @@ export async function connectCommand(options: ConnectOptions) {
       baseUrl,
     });
 
-    console.log(chalk.green('\n✅ Configuration saved!'));
-    console.log(chalk.gray(`   API Key: ${apiKey!.substring(0, 12)}...${apiKey!.slice(-4)}`));
-    console.log(chalk.gray(`   Server:  ${baseUrl}`));
-    console.log(chalk.cyan('\n💡 Run `ai-cost-cli analyze` to see your cost report'));
-
-    // Upsell to SaaS
-    console.log(chalk.yellow('\n🚀 Want real-time monitoring & alerts?'));
-    console.log(chalk.yellow('   Visit: https://aicostguard.com'));
+    console.log(chalk.green('\n✅ API key saved!'));
+    console.log(chalk.gray(`   Key:    ${apiKey!.substring(0, 12)}...${ apiKey!.slice(-4)}`));
+    console.log(chalk.gray(`   Server: ${baseUrl}`));
+    console.log();
+    console.log(chalk.bold('What you can do now:'));
+    console.log(chalk.cyan('  ai-cost-cli analyze   ') + chalk.gray('See AI cost breakdown'));
+    console.log(chalk.cyan('  ai-cost-cli optimize  ') + chalk.gray('Get cost-cutting tips'));
+    console.log(chalk.cyan('  ai-cost-cli models    ') + chalk.gray('Browse 50+ model prices'));
+    console.log();
+    console.log(chalk.gray('  💡 For real usage analytics, log in with your account:'));
+    console.log(chalk.gray('     ai-cost-cli login'));
   } catch (err: any) {
     spinner.fail(`Connection failed: ${err.message}`);
-    console.log(chalk.red('\nPlease check:'));
-    console.log(chalk.gray('  1. The AI Cost Guard server is running'));
-    console.log(chalk.gray('  2. The URL is correct'));
-    console.log(chalk.gray('  3. Your API key is valid'));
+    console.log(chalk.yellow('\n💡 Troubleshooting:'));
+    console.log(chalk.gray('  1. Make sure you\'re connected to the internet'));
+    console.log(chalk.gray('  2. Get your API key from: https://aicostguard.com/dashboard/projects'));
+    console.log(chalk.gray('  3. Sign up first if you don\'t have an account: ai-cost-cli signup'));
   }
 }

@@ -2,7 +2,6 @@ import chalk from 'chalk';
 import ora from 'ora';
 import Table from 'cli-table3';
 import { apiRequest } from '../api';
-import { getConfig } from '../config';
 
 interface ModelsOptions {
   provider?: string;
@@ -11,15 +10,11 @@ interface ModelsOptions {
 export async function modelsCommand(options: ModelsOptions) {
   console.log(chalk.bold.cyan('\n🛡️  AI Cost Guard — Supported Models\n'));
 
-  const config = getConfig();
-  const baseUrl = config?.baseUrl || 'http://localhost:4000';
-
   const spinner = ora('Fetching model pricing...').start();
 
   try {
     const models = await apiRequest<any[]>({
       path: '/pricing/models',
-      baseUrl,
     });
 
     spinner.succeed(`Found ${models.length} models\n`);

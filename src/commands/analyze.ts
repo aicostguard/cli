@@ -48,81 +48,94 @@ async function showRealAnalytics(
   spinner: ReturnType<typeof ora>,
 ) {
   try {
-    // Fetch dashboard overview from the real analytics API
-    const overview = await apiRequestAuth<any>(
-      `/analytics/${config.projectId}/overview?startDate=${startDate}&endDate=${endDate}`,
-      config.token,
-      config.baseUrl,
-    );
+    // Call all 3 analytics endpoints in parallel — each has different data
+    const dateParams = `startDate=${startDate}&endDate=${endDate}`;
+    const pid = config.projectId;
+    const base = config.baseUrl;
+    const tok = config.token;
 
-    // Fetch latency analytics
-    let latencyData: any = null;
-    try {
-      latencyData = await apiRequestAuth<any>(
-        `/analytics/${config.projectId}/latency?startDate=${startDate}&endDate=${endDate}`,
-        config.token,
-        config.baseUrl,
-      );
-    } catch { /* latency endpoint may not exist yet */ }
+    const [overview, modelData, timeData] = await Promise.all([
+      // /analytics/:id/overview  → {today:{cost,tokens,requests}, week:{...}, month:{...}, total:{events,todayEvents}}
+      apiRequestAuth<any>(`/analytics/${pid}/overview`, tok, base),
+
+      // /analytics/:id/cost-by-model?startDate=...&endDate=...
+      // → [{provider, model, totalCost, requestCount, inputTokens, outputTokens, avgLatencyMs}]
+      apiRequestAuth<any[]>(`/analytics/${pid}/cost-by-model?${dateParams}`, tok, base)
+        .catch(() => [] as any[]),
+
+      // /analytics/:id/cost-over-time?startDate=...&endDate=...
+      // → [{date, cost, tokens, requests}]
+      apiRequestAuth<any[]>(`/analytics/${pid}/cost-over-time?${dateParams}`, tok, base)
+        .catch(() => [] as any[]),
+    ]);
 
     spinner.succeed('Analysis complete!');
 
-    // Header
-    console.log(chalk.bold(`\n📊 AI COST REPORT — Real Data`));
-    console.log(chalk.gray(`   Project: ${config.projectName || config.projectId}`));
-    console.log(chalk.gray(`   Period:  ${startDate} → ${endDate} (${days} days)\n`));
+    // ── Header ──────────────────────────────────────────────────
+    console.log(chalk.bold(`\n📊 AI COST REPORT`));
+    console.log(chalk.gray(`   Project : ${config.projectName || pid}`));
+    console.log(chalk.gray(`   Period  : ${startDate} → ${endDate} (${days} days)\n`));
 
-    // Overview numbers
-    const totalCost = Number(overview.totalCost || 0);
-    const totalEvents = Number(overview.totalEvents || 0);
-    const avgCostPerEvent = totalEvents > 0 ? totalCost / totalEvents : 0;
+    // ── Summary table (uses /overview data) ─────────────────────
+    const monthCost   = Number(overview?.month?.cost   || 0);
+    const weekCost    = Number(overview?.week?.cost    || 0);
+    const todayCost   = Number(overview?.today?.cost   || 0);
+    const totalEvents = Number(overview?.total?.events || 0);
+    const todayEvents = Number(overview?.total?.todayEvents || 0);
 
-    const summaryTable = new Table({
-      style: { head: [], border: ['gray'] },
-    });
-
-    summaryTable.push(
-      [chalk.white('Total Cost'), chalk.bold.green(`$${totalCost.toFixed(4)}`)],
-      [chalk.white('Total Events'), chalk.bold.cyan(totalEvents.toLocaleString())],
-      [chalk.white('Avg Cost/Event'), chalk.yellow(`$${avgCostPerEvent.toFixed(6)}`)],
-      [chalk.white('Total Input Tokens'), chalk.gray(Number(overview.totalInputTokens || 0).toLocaleString())],
-      [chalk.white('Total Output Tokens'), chalk.gray(Number(overview.totalOutputTokens || 0).toLocaleString())],
+    // Use period cost from cost-by-model for the requested window
+    const periodCost = (modelData as any[]).reduce(
+      (acc: number, m: any) => acc + Number(m.totalCost || 0), 0
     );
+    const periodEvents = (modelData as any[]).reduce(
+      (acc: number, m: any) => acc + Number(m.requestCount || 0), 0
+    );
+    const avgCostPerEvent = periodEvents > 0 ? periodCost / periodEvents : 0;
 
+    const totalInputTokens  = (modelData as any[]).reduce((a: number, m: any) => a + Number(m.inputTokens  || 0), 0);
+    const totalOutputTokens = (modelData as any[]).reduce((a: number, m: any) => a + Number(m.outputTokens || 0), 0);
+
+    const summaryTable = new Table({ style: { head: [], border: ['gray'] } });
+    summaryTable.push(
+      [chalk.white(`Cost (last ${days}d)`), chalk.bold.green(`$${periodCost.toFixed(4)}`)],
+      [chalk.white('Cost today'),           chalk.green(`$${todayCost.toFixed(4)}`)],
+      [chalk.white('Cost this week'),       chalk.yellow(`$${weekCost.toFixed(4)}`)],
+      [chalk.white('Cost this month'),      chalk.yellow(`$${monthCost.toFixed(4)}`)],
+      [chalk.white(`Requests (${days}d)`),  chalk.bold.cyan(periodEvents.toLocaleString())],
+      [chalk.white('Requests today'),       chalk.gray(todayEvents.toLocaleString())],
+      [chalk.white('Total all-time'),       chalk.gray(totalEvents.toLocaleString())],
+      [chalk.white('Avg cost/request'),     chalk.yellow(`$${avgCostPerEvent.toFixed(6)}`)],
+      [chalk.white('Input tokens'),         chalk.gray(totalInputTokens.toLocaleString())],
+      [chalk.white('Output tokens'),        chalk.gray(totalOutputTokens.toLocaleString())],
+    );
     console.log(summaryTable.toString());
 
-    // Cost by model
-    if (overview.costByModel && overview.costByModel.length > 0) {
-      console.log(chalk.bold(`\n💰 COST BY MODEL\n`));
+    // ── Cost by model ────────────────────────────────────────────
+    let filteredModels = [...(modelData as any[])];
+    if (options.provider) {
+      filteredModels = filteredModels.filter((m: any) =>
+        m.provider?.toLowerCase().includes(options.provider!.toLowerCase()));
+    }
+    if (options.model) {
+      filteredModels = filteredModels.filter((m: any) =>
+        m.model?.toLowerCase().includes(options.model!.toLowerCase()));
+    }
 
+    if (filteredModels.length > 0) {
+      console.log(chalk.bold(`\n💰 COST BY MODEL\n`));
       const modelTable = new Table({
         head: [
-          chalk.white('Provider'),
-          chalk.white('Model'),
-          chalk.white('Events'),
-          chalk.white('Cost'),
-          chalk.white('% of Total'),
+          chalk.white('Provider'), chalk.white('Model'),
+          chalk.white('Requests'), chalk.white('Cost'), chalk.white('% of Total'),
         ],
         colWidths: [14, 28, 12, 14, 14],
         style: { head: [], border: ['gray'] },
       });
 
-      let models = overview.costByModel;
-      if (options.provider) {
-        models = models.filter((m: any) =>
-          m.provider?.toLowerCase().includes(options.provider!.toLowerCase()),
-        );
-      }
-      if (options.model) {
-        models = models.filter((m: any) =>
-          m.model?.toLowerCase().includes(options.model!.toLowerCase()),
-        );
-      }
-
-      for (const m of models) {
-        const cost = Number(m.totalCost || m._sum?.cost || 0);
-        const events = Number(m.eventCount || m._count || 0);
-        const pct = totalCost > 0 ? ((cost / totalCost) * 100).toFixed(1) : '0.0';
+      for (const m of filteredModels) {
+        const cost   = Number(m.totalCost   || 0);
+        const events = Number(m.requestCount || 0);
+        const pct    = periodCost > 0 ? ((cost / periodCost) * 100).toFixed(1) : '0.0';
         modelTable.push([
           chalk.cyan(m.provider || '-'),
           m.model || '-',
@@ -131,60 +144,43 @@ async function showRealAnalytics(
           `${pct}%`,
         ]);
       }
-
       console.log(modelTable.toString());
     }
 
-    // Cost over time
-    if (overview.costOverTime && overview.costOverTime.length > 0) {
+    // ── Daily trend ──────────────────────────────────────────────
+    if ((timeData as any[]).length > 0) {
       console.log(chalk.bold(`\n📈 DAILY COST TREND\n`));
-
       const trendTable = new Table({
-        head: [chalk.white('Date'), chalk.white('Events'), chalk.white('Cost')],
+        head: [chalk.white('Date'), chalk.white('Requests'), chalk.white('Cost')],
         colWidths: [14, 12, 14],
         style: { head: [], border: ['gray'] },
       });
 
-      // Show last 10 entries to keep it readable
-      const recent = overview.costOverTime.slice(-10);
+      const recent = (timeData as any[]).slice(-10);
       for (const day of recent) {
         trendTable.push([
-          day.date || '-',
-          Number(day.events || 0).toLocaleString(),
+          day.date     || '-',
+          Number(day.requests || 0).toLocaleString(),
           chalk.yellow(`$${Number(day.cost || 0).toFixed(4)}`),
         ]);
       }
-
       console.log(trendTable.toString());
     }
 
-    // Latency analytics
-    if (latencyData) {
-      console.log(chalk.bold(`\n⚡ LATENCY PERCENTILES\n`));
-      const latTable = new Table({
-        style: { head: [], border: ['gray'] },
-      });
-      latTable.push(
-        [chalk.white('P50'), chalk.cyan(`${Number(latencyData.overall?.p50 || 0).toFixed(0)} ms`)],
-        [chalk.white('P95'), chalk.yellow(`${Number(latencyData.overall?.p95 || 0).toFixed(0)} ms`)],
-        [chalk.white('P99'), chalk.red(`${Number(latencyData.overall?.p99 || 0).toFixed(0)} ms`)],
-      );
-      console.log(latTable.toString());
+    if (periodEvents === 0) {
+      console.log(chalk.yellow('\n⚠️  No usage events found for this period.\n'));
+      console.log(chalk.white('This means you haven\'t sent any AI API calls through the SDK yet.'));
+      console.log(chalk.gray('\nInstall the SDK in your app to start tracking:'));
+      console.log(chalk.cyan('  npm install @ai-cost-guard/sdk'));
+      console.log(chalk.cyan('  pip install ai-cost-guard-sdk'));
+      console.log(chalk.gray('\nSee quickstart: https://aicostguard.com/docs/quickstart\n'));
     }
 
-    // Optimization tips
     printOptimizationTips();
   } catch (err: any) {
     spinner.warn(`Could not fetch real analytics: ${err.message}`);
-    spinner.start('Falling back to pricing analysis...');
-    await showPricingAnalysis(
-      config as any,
-      days,
-      startDate,
-      endDate,
-      options,
-      spinner,
-    );
+    spinner.start('Falling back to pricing reference...');
+    await showPricingAnalysis(config as any, days, startDate, endDate, options, spinner);
   }
 }
 

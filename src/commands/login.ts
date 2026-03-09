@@ -3,6 +3,7 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import { updateConfig, getConfig } from '../config';
 import { apiRequest, apiRequestAuth } from '../api';
+import { projectCreateCommand } from './project';
 
 interface LoginOptions {
   email?: string;
@@ -18,10 +19,17 @@ interface LoginResponse {
   };
 }
 
+interface ApiKeyItem {
+  id: string;
+  name: string;
+  key: string;
+  isActive: boolean;
+}
+
 interface ProjectListItem {
   id: string;
   name: string;
-  apiKey: string;
+  apiKeys: ApiKeyItem[];
   eventsToday?: number;
 }
 
@@ -29,7 +37,11 @@ export async function loginCommand(options: LoginOptions) {
   console.log(chalk.bold.cyan('\n🛡️  AI Cost Guard — Login\n'));
 
   const existingConfig = getConfig();
-  const baseUrl = options.url || existingConfig?.baseUrl || 'http://localhost:4000';
+  // Migrate users who have the old localhost default saved in their config
+  const savedUrl = existingConfig?.baseUrl && existingConfig.baseUrl !== 'http://localhost:4000'
+    ? existingConfig.baseUrl
+    : null;
+  const baseUrl = options.url || savedUrl || 'https://api.aicostguard.com';
 
   // Prompt for credentials
   const answers = await inquirer.prompt([
@@ -106,17 +118,41 @@ export async function loginCommand(options: LoginOptions) {
           },
         ]);
 
+        const activeKey = selectedProject.apiKeys?.find((k: any) => k.isActive) || selectedProject.apiKeys?.[0];
+        const projectApiKey = activeKey?.key || '';
+
         updateConfig({
-          apiKey: selectedProject.apiKey,
+          apiKey: projectApiKey,
           projectId: selectedProject.id,
           projectName: selectedProject.name,
         });
 
         console.log(chalk.green(`\n✅ Connected to project: ${selectedProject.name}`));
         console.log(chalk.gray(`   Project ID: ${selectedProject.id}`));
-        console.log(chalk.gray(`   API Key:    ${selectedProject.apiKey.substring(0, 12)}...`));
+        if (projectApiKey) {
+          console.log(chalk.gray(`   API Key:    ${projectApiKey.substring(0, 12)}...`));
+        } else {
+          console.log(chalk.yellow('   ⚠️  No active API key found. Go to the dashboard to create one.'));
+          console.log(chalk.cyan('   https://aicostguard.com/dashboard/projects'));
+        }
       } else {
-        console.log(chalk.yellow('\n⚠️  No projects found. Create one on the dashboard first.'));
+        console.log(chalk.yellow('\n⚠️  No projects found for this account.\n'));
+
+        const { createNow } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'createNow',
+            message: 'Create your first project now?',
+            default: true,
+          },
+        ]);
+
+        if (createNow) {
+          await projectCreateCommand();
+        } else {
+          console.log(chalk.gray('\nWhen you\'re ready, run:'));
+          console.log(chalk.cyan('  ai-cost-cli projects create\n'));
+        }
       }
     } catch {
       projectSpinner.stop();

@@ -4,9 +4,14 @@
 
 Think of it like a **bank statement for your AI API bills** -- live, colorful, and completely free.
 
-[![npm version](https://img.shields.io/npm/v/ai-cost-cli.svg)](https://www.npmjs.com/package/ai-cost-cli)
+[![npm version](https://img.shields.io/npm/v/ai-cost-cli.svg)](https://www.npmjs.com/package/@ai-cost-guard/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js >= 16](https://img.shields.io/badge/node-%3E%3D16-brightgreen)](https://nodejs.org)
+
+<p align="center">
+  🌐 <a href="https://aicostguard.com"><strong>AI Cost Guard Dashboard</strong></a> &nbsp;·&nbsp;
+  ⭐ <strong>Star this repo if you find it useful!</strong>
+</p>
 
 ---
 
@@ -34,7 +39,7 @@ Follow these 5 steps in order. Do not skip Step 2 -- you cannot use the CLI with
 Open your terminal and run:
 
 ```bash
-npm install -g ai-cost-cli
+npm install -g @ai-cost-guard/cli
 ```
 
 You will now have two command aliases (both do the same thing):
@@ -442,11 +447,32 @@ Run `ai-cost-cli models` for the full live list with current pricing.
 | Dashboard | https://aicostguard.com/dashboard |
 | Projects | https://aicostguard.com/dashboard/projects |
 | Full Docs | https://aicostguard.com/docs |
-| npm | https://www.npmjs.com/package/ai-cost-cli |
+| npm | https://www.npmjs.com/package/@ai-cost-guard/cli |
 | Report a Bug | https://github.com/aicostguard/cli/issues |
+
+---
+
+## 📸 Dashboard Preview
+
+<p align="center">
+  <img src="https://aicostguard.com/dashboard/1.png" alt="AI Cost Guard — Main Dashboard" width="48%" />
+  &nbsp;
+  <img src="https://aicostguard.com/dashboard/4.png" alt="AI Cost Guard — Cost Analytics" width="48%" />
+</p>
+<p align="center">
+  <img src="https://aicostguard.com/dashboard/5.png" alt="AI Cost Guard — AI Intelligence" width="48%" />
+  &nbsp;
+  <img src="https://aicostguard.com/dashboard/6.png" alt="AI Cost Guard — Budget Alerts" width="48%" />
+</p>
+
+<p align="center">
+  <a href="https://aicostguard.com"><strong>🌐 Try the live dashboard →</strong></a>
+</p>
 
 ---
 
 ## License
 
 MIT (c) AI Cost Guard -- https://aicostguard.com
+
+<p align="center">⭐ If this project helps you, <strong>give it a star</strong> — it helps others discover it too!</p>
